@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Stredo K</title>
+<style>
+  body{margin:0;background:#111;color:white;font-family:Arial,system-ui; text-align:center;}
+  canvas{background:#1e3b5a;display:block;margin:10px auto;border:4px solid #333;border-radius:10px;}
+  #hud{margin:10px;font-size:18px;}
+  #menu,#upgrades,#quests,#levelSelect{display:none;padding:20px;}
+  button{font-size:16px;margin:6px;padding:8px 14px;cursor:pointer;border-radius:8px;border:none;}
+  #message{font-size:40px;font-weight:bold;margin-top:12px;display:none;animation:pop 1s ease forwards;}
+  @keyframes pop{0%{transform:scale(.2);opacity:0;}50%{transform:scale(1.3);opacity:1;}100%{transform:scale(1);opacity:1;}}
+  .palette{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:8px;max-width:520px;margin-left:auto;margin-right:auto;}
+  .color-swatch{width:28px;height:28px;border-radius:4px;cursor:pointer;border:2px solid #222;}
+  .power-list{display:flex;flex-direction:column;gap:6px;align-items:center;margin-top:8px;}
+  .quest-list{max-height:220px;overflow:auto;text-align:left;margin:8px auto;width:640px;background:rgba(0,0,0,0.1);padding:8px;border-radius:6px;}
+  .level-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;max-width:1000px;margin:8px auto;}
+  .level-btn{padding:8px;border-radius:8px;background:#333;color:white;border:1px solid #555;}
+  .disabled{opacity:0.45;}
+  .coins{font-weight:bold;}
+  .small{font-size:12px;padding:6px 10px;}
+</style>
+</head>
+<body>
+  <h2>Stredo K</h2>
+
+  <div id="hud">
+    <span id="nickHud"></span>
+    &nbsp;HP:<span id="hp">0</span> | DMG:<span id="dmg">0</span> | SPD:<span id="spd">0</span> | RLD:<span id="rld">0</span> |
+    Score:<span id="score">0</span> | Level:<span id="level">1</span> | 🪙 <span id="coins">0</span>
+    <span id="powerActive" style="margin-left:12px;"></span>
+  </div>
+
+  <canvas id="game" width="1200" height="800"></canvas>
+  <div id="message"></div>
+
+  <!-- MAIN MENU -->
+  <div id="menu">
+    <h3>Main Menu</h3>
+    <button onclick="startGame()">▶ Start Match</button>
+    <button onclick="showLevelSelect()">🗺️ Level Select</button>
+    <button onclick="showUpgrades()">⬆ Upgrades</button>
+    <button onclick="showQuests()">📜 Quests</button>
+  </div>
+
+  <!-- LEVEL SELECT (main menu only) -->
+  <div id="levelSelect">
+    <h3>Select Level (Unlocked)</h3>
+    <div id="levelGrid" class="level-grid"></div>
+    <br>
+    <button onclick="backToMenu()">⬅ Back</button>
+  </div>
+
+  <!-- UPGRADES -->
+  <div id="upgrades">
+    <h3>Upgrades</h3>
+    <p>🪙 <span id="coinsU">0</span></p>
+
+    <div>
+      <div>HP: <span id="upHPVal">0</span> | Cost: 🪙 <span id="costHP">0</span></div>
+      <button onclick="buyStat('hp')">Buy +HP</button>
+    </div>
+    <div>
+      <div>Damage: <span id="upDMGVal">0</span> | Cost: 🪙 <span id="costDMG">0</span></div>
+      <button onclick="buyStat('dmg')">Buy +DMG</button>
+    </div>
+    <div>
+      <div>Speed: <span id="upSPDVal">0</span> | Cost: 🪙 <span id="costSPD">0</span></div>
+      <button onclick="buyStat('spd')">Buy +SPD</button>
+    </div>
+    <div>
+      <div>Reload (lower is faster): <span id="upRLDVal">0</span> | Cost: 🪙 <span id="costRLD">0</span></div>
+      <button onclick="buyStat('rld')">Buy Reload</button>
+    </div>
+
+    <hr>
+
+    <div>
+      <button onclick="openColorPicker()">🎨 Change Color (50 🪙)</button>
+      <div id="colorPicker" class="palette" style="display:none;"></div>
+    </div>
+
+    <hr>
+
+    <div>
+      <h4>Special Power-Ups (125 🪙)</h4>
+      <div class="power-list" id="powerList">
+        <div><button onclick="togglePowerBuy('auto')">🎯 Auto-Aim</button></div>
+        <div><button onclick="togglePowerBuy('ricochet')">🔄 Ricochet</button></div>
+        <div><button onclick="togglePowerBuy('shield')">🛡️ Shield Cycle</button></div>
+        <div><button onclick="togglePowerBuy('lifesteal')">❤️‍🔥 Life Steal</button></div>
+      </div>
+      <div id="powerInfo"></div>
+      <div style="margin-top:8px;">
+        <button onclick="deactivatePower()">Deactivate Power</button>
+        <button onclick="backMenu()">⬅ Back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUESTS -->
+  <div id="quests">
+    <h3>Quests</h3>
+    <div class="quest-list" id="questList"></div>
+    <button onclick="backMenu()">⬅ Back</button>
+  </div>
+
+<script>
+/* -----------------------
+   STREDO K - Full Prototype w/ 150 levels & bosses
+   ------------------------*/
+
+const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+const hud = { hp: document.getElementById("hp"), dmg: document.getElementById("dmg"), spd: document.getElementById("spd"),
+              score: document.getElementById("score"), level: document.getElementById("level"),
+              coins: document.getElementById("coins"), nick: document.getElementById("nickHud"),
+              coinsU: document.getElementById("coinsU") };
+const menu = document.getElementById("menu"), upgradesPanel = document.getElementById("upgrades"), questsPanel = document.getElementById("quests");
+const levelSelectPanel = document.getElementById("levelSelect"), levelGrid = document.getElementById("levelGrid");
+const colorPicker = document.getElementById("colorPicker"), powerInfo = document.getElementById("powerInfo"), powerList = document.getElementById("powerList");
+const messageEl = document.getElementById("message");
+
+let keys = {}, mouse = {x: canvas.width/2, y: canvas.height/2, down: false};
+window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+canvas.addEventListener('mousemove', e => { const r = canvas.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; });
+canvas.addEventListener('mousedown', () => mouse.down = true);
+canvas.addEventListener('mouseup', () => mouse.down = false);
+
+// floating texts
+let floatTexts = [];
+function addFloatingText(x,y,txt,color){
+  floatTexts.push({x,y,txt,color,alpha:1,vy:40,ttl:1.0});
+}
+function updateFloatingTexts(dt){
+  for(let i=floatTexts.length-1;i>=0;i--){
+    const t = floatTexts[i];
+    t.y -= t.vy * dt;
+    t.ttl -= dt;
+    t.alpha = Math.max(0, t.ttl / 1.0);
+    if(t.ttl <= 0) floatTexts.splice(i,1);
+  }
+}
+function drawFloatingTexts(){
+  ctx.save(); ctx.textAlign="center"; ctx.font="16px Arial";
+  for(const t of floatTexts){
+    ctx.globalAlpha = t.alpha;
+    ctx.fillStyle = t.color;
+    ctx.fillText(t.txt, t.x, t.y);
+  }
+  ctx.globalAlpha = 1; ctx.restore();
+}
+
+// main entities
+function createBrawler(x,y,hp,spd,dmg,fr){ return {x,y,r:20,hp,maxHp:hp,speed:spd,dmg,fireRate:fr,lastShot:0,vx:0,vy:0, isBoss:false}; }
+let player, bots = [], projectiles = [], score = 0, level = 1, running = false, levelBreak = 0;
+let nickname = null;
+
+// economy & upgrades
+let coins = 0;
+let playerStats = { hp: 120, dmg: 20, spd: 200, rld: 0.4, color: "#ff66cc" };
+// per-stat cost and scaling (separate)
+let upgradeCosts = { hp: 30, dmg: 30, spd: 30, rld: 40 };
+let upgradeCounts = { hp: 0, dmg: 0, spd: 0, rld: 0 }; // for scaling
+
+// color palette
+const colorOptions = [ "#ff66cc","#66ccff","#33ff77","#ff3333","#ffa500","#00ffff","#ff1493","#7cfc00","#ffff00","#ff4500",
+                       "#8a2be2","#00ff7f","#ff69b4","#1e90ff","#adff2f","#ff6347","#20b2aa","#ffd700","#00ced1","#ba55d3",
+                       "#deb887","#ff00ff","#7fffd4","#dc143c","#b22222" ];
+
+// power-ups
+const POWER_COST = 125;
+let purchasedPowers = {}; // e.g. {auto:true, ricochet:true}
+let chosenPower = null;   // active power
+// shield/lifesteal states
+let shieldState = {on:false, timer:0};
+let lifeState = {active:false, timer:0, cooldown:0};
+
+// quests (20) - all active, track progress
+let quests = [
+  {id:1,text:"Kill 5 bots",target:5,progress:0,reward:20,done:false},
+  {id:2,text:"Win 3 levels",target:3,progress:0,reward:25,done:false},
+  {id:3,text:"Earn 50 🪙",target:50,progress:0,reward:30,done:false},
+  {id:4,text:"Kill 20 bots",target:20,progress:0,reward:40,done:false},
+  {id:5,text:"Survive 60s",target:60,progress:0,reward:35,done:false},
+  {id:6,text:"Have 3 victories",target:3,progress:0,reward:30,done:false},
+  {id:7,text:"Use a power-up",target:1,progress:0,reward:15,done:false},
+  {id:8,text:"Change color",target:1,progress:0,reward:10,done:false},
+  {id:9,text:"Upgrade HP twice",target:2,progress:0,reward:20,done:false},
+  {id:10,text:"Upgrade Damage twice",target:2,progress:0,reward:20,done:false},
+  {id:11,text:"Upgrade Speed twice",target:2,progress:0,reward:20,done:false},
+  {id:12,text:"Upgrade Reload twice",target:2,progress:0,reward:20,done:false},
+  {id:13,text:"Kill 50 bots",target:50,progress:0,reward:80,done:false},
+  {id:14,text:"Win level 5",target:5,progress:0,reward:60,done:false},
+  {id:15,text:"Collect 100 🪙 total",target:100,progress:0,reward:50,done:false},
+  {id:16,text:"Defeat 5 ricochet hits",target:5,progress:0,reward:30,done:false},
+  {id:17,text:"Deal 500 damage",target:500,progress:0,reward:60,done:false},
+  {id:18,text:"Use shield block 10 times",target:10,progress:0,reward:40,done:false},
+  {id:19,text:"Finish a level without damage",target:1,progress:0,reward:100,done:false},
+  {id:20,text:"Play 10 matches",target:10,progress:0,reward:70,done:false}
+];
+
+// progression & saving
+let unlockedLevels = [1]; // level 1 unlocked initially
+const MAX_LEVEL = 150;
+const SAVE_KEY = "stredo_k_save_v2";
+function saveProgress(){
+  const data = {
+    coins, playerStats, upgradeCosts, upgradeCounts, purchasedPowers, chosenPower, unlockedLevels, quests, nickname, level
+  };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch(e){}
+}
+function loadProgress(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    if(d.coins!=null) coins = d.coins;
+    if(d.playerStats) playerStats = Object.assign(playerStats, d.playerStats);
+    if(d.upgradeCosts) upgradeCosts = Object.assign(upgradeCosts, d.upgradeCosts);
+    if(d.upgradeCounts) upgradeCounts = Object.assign(upgradeCounts, d.upgradeCounts);
+    if(d.purchasedPowers) purchasedPowers = Object.assign(purchasedPowers, d.purchasedPowers);
+    if(d.chosenPower) chosenPower = d.chosenPower;
+    if(d.unlockedLevels) unlockedLevels = Array.from(new Set(d.unlockedLevels));
+    if(d.quests){
+      for(const q of d.quests){
+        const found = quests.find(x=>x.id===q.id);
+        if(found){ found.progress = q.progress||found.progress; found.done = q.done||found.done; }
+      }
+    }
+    if(d.nickname) nickname = d.nickname;
+    if(d.level) level = d.level;
+  }catch(e){}
+}
+loadProgress();
+
+// nickname
+function askNickname(){
+  if(!nickname){
+    const n = prompt("Enter nickname (max 20 chars):", "Stredo K");
+    nickname = (n && n.trim().slice(0,20)) || "Stredo K";
+    localStorage.setItem("stredo_k_nick", nickname);
+    saveProgress();
+  }
+}
+if(!nickname) askNickname();
+
+// spawn bots or boss
+function spawnBots(lv){
+  bots = [];
+  // boss levels (10,20,...150) replaced bots with a single boss
+  if(lv % 10 === 0){
+    const bossTier = lv / 10; // 1..15
+    const hp = Math.floor(400 * Math.pow(1.25, bossTier-1)); // ramp
+    const dmg = Math.floor(20 * (1 + bossTier*0.6));
+    const spd = 80 + bossTier*10;
+    const fr = Math.max(0.5 - bossTier*0.02, 0.2);
+    const b = createBrawler(canvas.width/2, canvas.height/2 - 100, hp, spd, dmg, fr);
+    b.isBoss = true;
+    b.sizeScale = 2.0;
+    b.r = Math.floor(20 * b.sizeScale);
+    b.bossTier = bossTier;
+    b.lastSpecial = 0;
+    b.state = {dashing:false, dashTimer:0, dashTarget:null};
+    bots.push(b);
+    return;
+  }
+
+  // normal level: gentle early scaling; more bots at higher lv
+  let num = (lv === 1) ? 1 : Math.min(2 + Math.floor(lv/2), 8 + Math.floor(lv/10));
+  for(let i=0;i<num;i++){
+    const baseHp = 60 + Math.floor(lv*10);
+    const baseSpd = 110 + Math.floor(lv*6);
+    const baseDmg = 8 + Math.floor(lv*2);
+    const fr = Math.max(0.5 - Math.min(0.4, lv*0.01), 0.25);
+    const x = Math.random()*(canvas.width-200)+100;
+    const y = Math.random()*(canvas.height-200)+100;
+    bots.push(createBrawler(x,y, baseHp, baseSpd, baseDmg, fr));
+  }
+}
+
+// bullet factory
+function createBullet(owner,x,y,dx,dy,speed,dmg){
+  const len = Math.hypot(dx,dy) || 1;
+  return { owner, x, y, vx: dx/len*speed, vy: dy/len*speed, r:5, dmg, bounces:0, color: owner==="player" ? playerStats.color : "orange" };
+}
+
+// UI: build level select (main menu)
+function showLevelSelect(){
+  menu.style.display = "none"; levelSelectPanel.style.display = "block";
+  levelGrid.innerHTML = "";
+  for(let i=1;i<=MAX_LEVEL; i++){
+    const btn = document.createElement("button");
+    btn.className = "level-btn";
+    btn.textContent = "L " + i + (i % 10 === 0 ? " 🧨" : "");
+    if(!unlockedLevels.includes(i)) btn.classList.add("disabled");
+    btn.onclick = () => {
+      if(!unlockedLevels.includes(i)) { alert("Level locked"); return; }
+      startGame(i);
+    };
+    levelGrid.appendChild(btn);
+  }
+}
+
+// startGame default or at level
+function startGame(startLevel = null){
+  menu.style.display = "none"; upgradesPanel.style.display = "none"; questsPanel.style.display = "none"; levelSelectPanel.style.display = "none";
+  askNickname();
+  player = createBrawler(canvas.width/2, canvas.height/2, playerStats.hp, playerStats.spd, playerStats.dmg, playerStats.rld);
+  player.hp = player.maxHp = playerStats.hp; player.speed = playerStats.spd; player.dmg = playerStats.dmg; player.fireRate = playerStats.rld; player.lastShot = 0;
+  projectiles = []; score = 0; running = true;
+  if(startLevel) { level = startLevel; } else if(level < 1) level = 1;
+  spawnBots(level);
+  levelBreak = 0;
+  updateHUD();
+}
+
+// upgrades: buy stat (separate cost rises)
+function buyStat(stat){
+  const cost = upgradeCosts[stat];
+  if(coins < cost){ alert("Not enough 🪙"); return; }
+  coins -= cost;
+  upgradeCounts[stat] = (upgradeCounts[stat]||0) + 1;
+  upgradeCosts[stat] = Math.ceil(upgradeCosts[stat] * 1.45); // increase per-stat
+  if(stat === "hp"){ playerStats.hp += 10; }
+  if(stat === "dmg"){ playerStats.dmg += 5; }
+  if(stat === "spd"){ playerStats.spd += 20; }
+  if(stat === "rld"){
+    playerStats.rld = Math.max(0.06, playerStats.rld - 0.05);
+  }
+  saveProgress(); renderUpgradeUI(); updateHUD();
+}
+
+// render upgrade UI info
+function renderUpgradeUI(){
+  document.getElementById("upHPVal").textContent = playerStats.hp;
+  document.getElementById("upDMGVal").textContent = playerStats.dmg;
+  document.getElementById("upSPDVal").textContent = playerStats.spd;
+  document.getElementById("upRLDVal").textContent = playerStats.rld.toFixed(2);
+  document.getElementById("costHP").textContent = upgradeCosts.hp;
+  document.getElementById("costDMG").textContent = upgradeCosts.dmg;
+  document.getElementById("costSPD").textContent = upgradeCosts.spd;
+  document.getElementById("costRLD").textContent = upgradeCosts.rld;
+}
+
+// color picker
+function openColorPicker(){
+  if(coins < 50){ alert("50 🪙 required"); return; }
+  colorPicker.style.display = "flex"; colorPicker.innerHTML = "";
+  colorOptions.forEach((c,i)=>{
+    const d = document.createElement("div"); d.className = "color-swatch"; d.style.background = c;
+    d.onclick = () => {
+      if(!confirm("Change color to "+c+" for 50 🪙?")) return;
+      coins -= 50; playerStats.color = c; saveProgress(); colorPicker.style.display = "none"; updateHUD();
+      // quest progress for color change
+      const q = quests.find(q=>q.text.includes("Change color"));
+      if(q && !q.done){ q.progress = (q.progress||0) + 1; if(q.progress>=q.target){ q.done=true; coins+=q.reward; } }
+    };
+    colorPicker.appendChild(d);
+  });
+}
+function renderColorPickerHidden(){ colorPicker.style.display = "none"; }
+
+// power-ups: buy or toggle (can deactivate and switch if already purchased)
+function togglePowerBuy(type){
+  if(purchasedPowers[type]){
+    if(chosenPower === type){
+      if(confirm("Deactivate "+type+"?")){ chosenPower = null; saveProgress(); renderPowerUI(); }
+      return;
+    }
+    chosenPower = type; saveProgress(); renderPowerUI(); return;
+  }
+  if(coins < POWER_COST){ alert("Need 125 🪙"); return; }
+  if(!confirm("Buy power-up "+type+" for 125 🪙?")) return;
+  coins -= POWER_COST; purchasedPowers[type] = true; chosenPower = type;
+  if(type === "shield"){ shieldState = {on:false, timer:0}; }
+  if(type === "lifesteal"){ lifeState = {active:false, timer:0, cooldown:0}; }
+  saveProgress(); renderPowerUI(); updateHUD();
+}
+
+function deactivatePower(){ if(!chosenPower){ alert("No power active"); return; } if(confirm("Deactivate power-up "+chosenPower+"?")){ chosenPower = null; saveProgress(); renderPowerUI(); } }
+
+function renderPowerUI(){
+  Array.from(powerList.querySelectorAll("button")).forEach(btn=>{ btn.disabled = false; });
+  powerInfo.textContent = chosenPower ? ("Active power: " + chosenPower) : "No active special power";
+  document.getElementById("powerInfo").innerText = chosenPower ? ("Active: " + chosenPower) : "No special power";
+}
+
+// quests render (shows progress like 2/5)
+function renderQuests(){
+  const el = document.getElementById("questList"); el.innerHTML = "";
+  for(const q of quests){
+    const p = document.createElement("div");
+    p.innerHTML = `${q.text} — ${q.progress || 0}/${q.target} ${q.done ? "✅" : ""} (Reward: 🪙 ${q.reward})`;
+    el.appendChild(p);
+  }
+}
+
+// main loop
+let last = 0;
+function loop(ts){
+  const dt = (ts - last)/1000 || 0; last = ts;
+  if(running) update(dt);
+  if(running) draw();
+  updateFloatingTexts(dt);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// update
+function update(dt){
+  if(!running) return;
+
+  // shield cycling
+  if(chosenPower === "shield"){
+    if(shieldState.timer <= 0){
+      shieldState.on = !shieldState.on;
+      shieldState.timer = shieldState.on ? 2 : 5;
+    }
+    shieldState.timer -= dt;
+  }
+
+  // lifesteal auto cycle
+  if(chosenPower === "lifesteal"){
+    if(!lifeState.active && lifeState.cooldown <= 0){
+      lifeState.active = true; lifeState.timer = 2; lifeState.cooldown = 9;
+    }
+    if(lifeState.active){ lifeState.timer -= dt; if(lifeState.timer <=0) lifeState.active = false; }
+    if(lifeState.cooldown > 0) lifeState.cooldown -= dt;
+  }
+
+  // level break pause (2s)
+  if(levelBreak > 0){
+    levelBreak -= dt;
+    if(levelBreak <= 0){
+      // spawn next level wave; spawnBots will handle boss vs normal
+      spawnBots(level);
+    }
+    return;
+  }
+
+  // movement
+  let ax=0, ay=0; if(keys['w']) ay-=1; if(keys['s']) ay+=1; if(keys['a']) ax-=1; if(keys['d']) ax+=1;
+  const mag = Math.hypot(ax,ay) || 1;
+  player.vx = ax/mag * player.speed; player.vy = ay/mag * player.speed;
+  player.x += player.vx * dt; player.y += player.vy * dt;
+  player.x = Math.max(player.r, Math.min(canvas.width-player.r, player.x));
+  player.y = Math.max(player.r, Math.min(canvas.height-player.r, player.y));
+
+  // shooting (player)
+  player.lastShot += dt;
+  if(mouse.down && player.lastShot > player.fireRate){
+    projectiles.push(createBullet("player", player.x, player.y, mouse.x-player.x, mouse.y-player.y, 400*dt, player.dmg));
+    player.lastShot = 0;
+  }
+
+  // bots AI: predictive shooting; special boss behavior if boss present
+  for(const b of bots){
+    if(b.isBoss){
+      bossBehavior(b, dt);
+      continue;
+    }
+    // normal bot
+    const dx = player.x - b.x, dy = player.y - b.y;
+    const dist = Math.hypot(dx,dy);
+    if(dist>0){
+      b.x += dx/dist * b.speed * dt * 0.55;
+      b.y += dy/dist * b.speed * dt * 0.55;
+    }
+    b.lastShot += dt;
+    if(b.lastShot > b.fireRate){
+      const bulletSpeed = 350;
+      const leadTime = dist / bulletSpeed;
+      const fx = player.x + player.vx * leadTime;
+      const fy = player.y + player.vy * leadTime;
+      projectiles.push(createBullet("bot", b.x, b.y, fx-b.x, fy-b.y, bulletSpeed*dt, b.dmg));
+      b.lastShot = 0;
+    }
+  }
+
+  // projectiles update & collision
+  for(let i=projectiles.length-1;i>=0;i--){
+    const p = projectiles[i];
+    p.x += p.vx; p.y += p.vy;
+
+    // ricochet handling for player bullets
+    if(chosenPower === "ricochet" && p.owner === "player"){
+      let bounced = false;
+      if(p.x - p.r <= 0){ p.vx = Math.abs(p.vx); p.bounces = (p.bounces||0)+1; bounced = true; }
+      if(p.x + p.r >= canvas.width){ p.vx = -Math.abs(p.vx); p.bounces = (p.bounces||0)+1; bounced = true; }
+      if(p.y - p.r <= 0){ p.vy = Math.abs(p.vy); p.bounces = (p.bounces||0)+1; bounced = true; }
+      if(p.y + p.r >= canvas.height){ p.vy = -Math.abs(p.vy); p.bounces = (p.bounces||0)+1; bounced = true; }
+      if(bounced && (p.bounces||0) > 3){ projectiles.splice(i,1); continue; }
+    } else {
+      if(p.x < -50 || p.x > canvas.width+50 || p.y < -50 || p.y > canvas.height+50){ projectiles.splice(i,1); continue; }
+    }
+
+    if(p.owner === "player"){
+      // auto-aim slight homing
+      if(chosenPower === "auto" && bots.length){
+        let nearest = null, nd = Infinity;
+        for(const b of bots){ const dd = Math.hypot(b.x-p.x,b.y-p.y); if(dd<nd){ nd=dd; nearest=b; } }
+        if(nearest){
+          const desX = nearest.x - p.x, desY = nearest.y - p.y;
+          const dlen = Math.hypot(desX,desY)||1;
+          const speedMag = Math.hypot(p.vx,p.vy)||1;
+          const desiredVX = (desX/dlen)*speedMag, desiredVY = (desY/dlen)*speedMag;
+          const lerp = 0.06;
+          p.vx = p.vx*(1-lerp) + desiredVX*lerp;
+          p.vy = p.vy*(1-lerp) + desiredVY*lerp;
+        }
+      }
+
+      // collisions with bots
+      for(let j=bots.length-1;j>=0;j--){
+        const b = bots[j];
+        if(Math.hypot(p.x - b.x, p.y - b.y) < b.r){
+          const dmg = p.dmg;
+          b.hp -= dmg;
+          addFloatingText(b.x, b.y - b.r - 8, String(dmg), "white"); // white damage
+          // lifesteal if active
+          if(chosenPower === "lifesteal" && lifeState.active){
+            const heal = Math.min(player.maxHp - player.hp, dmg);
+            if(heal>0){ player.hp = Math.min(player.maxHp, player.hp + heal); addFloatingText(player.x, player.y - player.r - 12, "+"+String(heal), "lightgreen"); }
+          }
+          projectiles.splice(i,1);
+          if(b.hp <= 0){
+            const wasBoss = !!b.isBoss;
+            bots.splice(j,1);
+            score++; coins += (wasBoss ? 25 : 1); // boss reward bigger
+            hud.coins.textContent = coins; hud.score.textContent = score;
+            // update quests: kill counts etc
+            for(const q of quests){
+              if(!q.done && q.text.includes("Kill") && !q.text.includes("Boss")){ q.progress = (q.progress||0)+1; if(q.progress>=q.target){ q.done=true; coins+=q.reward; } }
+              if(!q.done && wasBoss && q.text.toLowerCase().includes("boss")){ q.progress = (q.progress||0)+1; if(q.progress>=q.target){ q.done=true; coins+=q.reward; } }
+            }
+            if(bots.length === 0){
+              // level cleared
+              level++; coins += 15; // level clear reward
+              // mark quests for wins
+              for(const q of quests){ if(!q.done && (q.text.includes("Win") || q.text.includes("victory"))){ q.progress = (q.progress||0)+1; if(q.progress>=q.target){ q.done=true; coins+=q.reward; } } }
+              player.hp = player.maxHp;
+              applyTempBuff();
+              levelBreak = 2.0; // 2 second pause before next wave spawn
+              // unlock next level
+              if(level <= MAX_LEVEL && !unlockedLevels.includes(level)) unlockedLevels.push(level);
+              saveProgress();
+            }
+          }
+          break;
+        }
+      }
+    } else {
+      // bot bullet hits player
+      if(Math.hypot(p.x - player.x, p.y - player.y) < player.r){
+        // shield blocks
+        if(chosenPower === "shield" && shieldState.on){
+          addFloatingText(player.x, player.y - player.r - 10, "Blocked", "silver");
+          const q = quests.find(q=>q.text.includes("shield"));
+          if(q && !q.done){ q.progress = (q.progress||0)+1; if(q.progress>=q.target){ q.done=true; coins+=q.reward; } }
+        } else {
+          player.hp -= p.dmg;
+          addFloatingText(player.x, player.y - player.r - 10, String(p.dmg), "red"); // red damage taken
+          // update quests for survive/dmg etc
+          if(player.hp <= 0){
+            running = false;
+            showMessage("💀 Defeat!","red");
+            saveProgress();
+            setTimeout(()=>{ backMenu(); }, 2500);
+          }
+        }
+        projectiles.splice(i,1);
+      }
+    }
+  } // end projectiles loop
+
+  updateHUD();
+}
+
+// ---------- Boss behaviors ----------
+function bossBehavior(b, dt){
+  // boss basic movement: slow tracking to center then small orbit unless dashing
+  const dx = player.x - b.x, dy = player.y - b.y;
+  const dist = Math.hypot(dx,dy);
+  if(b.state.dashing){
+    // during dash: move towards dashTarget quickly
+    if(b.state.dashTarget){
+      const ddx = b.state.dashTarget.x - b.x, ddy = b.state.dashTarget.y - b.y;
+      const dlen = Math.hypot(ddx,ddy)||1;
+      b.x += (ddx/dlen) * b.speed * 2.4 * dt;
+      b.y += (ddy/dlen) * b.speed * 2.4 * dt;
+    }
+    b.state.dashTimer -= dt;
+    if(b.state.dashTimer <= 0){
+      b.state.dashing = false;
+      b.state.dashTarget = null;
+    }
+  } else {
+    // normal: move slowly toward player but maintain some distance
+    if(dist > 60){
+      b.x += dx/dist * b.speed * dt * 0.35;
+      b.y += dy/dist * b.speed * dt * 0.35;
+    }
+  }
+
+  b.lastSpecial = (b.lastSpecial || 0) + dt;
+
+  // Multi-shot spread every few seconds
+  const spreadInterval = Math.max(1.2 - b.bossTier*0.03, 0.6);
+  if(b.lastSpecial > spreadInterval){
+    b.lastSpecial = 0;
+    // multi-shot: 3 to 3 + tier/4 bullets
+    const count = Math.min(3 + Math.floor(b.bossTier/4), 7);
+    const angleToPlayer = Math.atan2(player.y - b.y, player.x - b.x);
+    const spread = Math.PI/8; // cone
+    for(let s=0;s<count;s++){
+      const a = angleToPlayer + ( (s/(count-1)) - 0.5 ) * spread;
+      const vx = Math.cos(a), vy = Math.sin(a);
+      projectiles.push({ owner:"bot", x:b.x + vx*(b.r+8), y:b.y + vy*(b.r+8), vx: vx * 420*dt, vy: vy * 420*dt, r:6, dmg: Math.floor(b.dmg*0.9) });
+    }
+  }
+
+  // Dash occasionally
+  if(!b.state.dashing && Math.random() < 0.002 * b.bossTier){
+    b.state.dashing = true;
+    b.state.dashTimer = 0.6 + Math.random()*0.6;
+    b.state.dashTarget = { x: player.x + (Math.random()*80-40), y: player.y + (Math.random()*80-40) };
+  }
+
+  // bullet rain for higher tiers (from tier 5 --> level 50)
+  if(b.bossTier >= 5 && Math.random() < 0.003 * b.bossTier){
+    // spawn ring of bullets (bullet rain)
+    const pieces = 18 + Math.floor(b.bossTier*1.2);
+    for(let a=0;a<pieces;a++){
+      const ang = (a/pieces) * Math.PI*2;
+      projectiles.push({ owner:"bot", x:b.x, y:b.y, vx:Math.cos(ang)*220*dt, vy:Math.sin(ang)*220*dt, r:4, dmg: Math.floor(b.dmg*0.6) });
+    }
+  }
+
+  // boss also shoots predictive bursts occasionally (as bots)
+  b.lastShot += dt;
+  if(b.lastShot > b.fireRate){
+    const bulletSpeed = 350;
+    const leadTime = dist / bulletSpeed;
+    const fx = player.x + player.vx * leadTime;
+    const fy = player.y + player.vy * leadTime;
+    projectiles.push(createBullet("bot", b.x, b.y, fx - b.x, fy - b.y, bulletSpeed*dt, b.dmg));
+    b.lastShot = 0;
+  }
+}
+
+// draw
+function drawBrawler(b,col){
+  // body
+  ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle="black"; ctx.stroke();
+  // hp bar
+  const barW = Math.max(40, b.r*2), barH = 6;
+  ctx.fillStyle="red"; ctx.fillRect(b.x-barW/2, b.y-b.r-18, barW, barH);
+  ctx.fillStyle="lime"; ctx.fillRect(b.x-barW/2, b.y-b.r-18, barW * (Math.max(0,b.hp)/b.maxHp), barH);
+  ctx.strokeStyle="black"; ctx.strokeRect(b.x-barW/2, b.y-b.r-18, barW, barH);
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // aim line
+  ctx.beginPath(); ctx.moveTo(player.x, player.y); ctx.lineTo(mouse.x, mouse.y); ctx.strokeStyle="yellow"; ctx.stroke();
+
+  // draw player
+  drawBrawler(player, playerStats.color);
+  // draw nickname above player
+  ctx.font = "14px Arial"; ctx.fillStyle = "white"; ctx.textAlign = "center";
+  ctx.fillText(nickname || "Player", player.x, player.y - player.r - 22);
+
+  // pet indicators
+  if(chosenPower === "shield" && shieldState.on){
+    ctx.font = "20px Arial"; ctx.fillText("🐶", player.x + 28, player.y - 8);
+  }
+  if(chosenPower === "lifesteal" && lifeState.active){
+    ctx.font = "20px Arial"; ctx.fillText("🦊", player.x - 34, player.y - 8);
+  }
+
+  // draw bots (boss or normal)
+  for(const b of bots){
+    if(b.isBoss){
+      drawBrawler(b, "#ff8844");
+      // label boss
+      ctx.font = "16px Arial"; ctx.fillStyle = "white"; ctx.fillText("BOSS L"+(b.bossTier*10), b.x, b.y - b.r - 28);
+    } else drawBrawler(b, "#33ff77");
+  }
+
+  // draw projectiles
+  for(const p of projectiles){
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fillStyle = p.owner === "player" ? (p.color || playerStats.color) : "orange";
+    ctx.fill();
+  }
+
+  // floating texts
+  drawFloatingTexts();
+
+  // level break message
+  if(levelBreak > 0){
+    ctx.fillStyle="white"; ctx.font="28px Arial"; ctx.fillText("✨ Next Level in 2s... ✨", canvas.width/2 - 140, canvas.height/2);
+  }
+}
+
+// HUD and helpers
+function updateHUD(){
+  hud.hp.textContent = Math.max(0, Math.floor(player.hp));
+  hud.dmg.textContent = player.dmg;
+  hud.spd.textContent = player.speed;
+  hud.level.textContent = level;
+  hud.coins.textContent = coins;
+  hud.score.textContent = score;
+  hud.coinsU.textContent = coins;
+  hud.nick.textContent = nickname ? ("👤 " + nickname) : "";
+  renderUpgradeUI();
+  renderQuests();
+  renderPowerUI();
+}
+
+// messages & buffs
+function showMessage(t,c){ messageEl.style.display = "block"; messageEl.textContent = t; messageEl.style.color = c; messageEl.style.animation="none"; messageEl.offsetHeight; messageEl.style.animation="pop 1s ease forwards"; setTimeout(()=>messageEl.style.display="none",2500); }
+
+function applyTempBuff(){
+  const buffs = ["⚡ Speed Boost!","💥 Damage Boost!","🛡️ HP Regen!"];
+  const pick = buffs[Math.floor(Math.random()*buffs.length)];
+  showMessage("Victory! " + pick, "lime");
+  if(pick.includes("Speed")) player.speed *= 1.5;
+  if(pick.includes("Damage")) player.dmg *= 1.5;
+  if(pick.includes("HP")) player.hp = player.maxHp;
+  setTimeout(()=>{ player.speed = playerStats.spd; player.dmg = playerStats.dmg; }, 5000);
+}
+
+// input
+document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+canvas.addEventListener("click", e => {
+  if(!running || levelBreak>0) return;
+  const dx = e.offsetX - player.x, dy = e.offsetY - player.y;
+  projectiles.push(createBullet("player", player.x, player.y, dx, dy, 400, player.dmg));
+});
+
+// save on unload
+window.addEventListener("beforeunload", () => saveProgress());
+
+// public functions for buttons
+function showUpgrades(){ menu.style.display="none"; upgradesPanel.style.display="block"; renderUpgradeUI(); renderColorPickerHidden(); renderPowerUI(); }
+function backMenu(){ menu.style.display="block"; upgradesPanel.style.display="none"; questsPanel.style.display="none"; levelSelectPanel.style.display="none"; saveProgress(); }
+function showQuests(){ menu.style.display="none"; questsPanel.style.display="block"; renderQuests(); }
+function backToMenu(){ levelSelectPanel.style.display="none"; menu.style.display="block"; }
+
+// initial UI render
+renderUpgradeUI();
+renderQuests();
+renderPowerUI();
+renderColorPickerHidden();
+backMenu();
+updateHUD();
+
+// minimal loop driver (already using requestAnimationFrame above)
+(function(){ let rafLast=0; function f(t){ const dt=(t-rafLast)/1000||0; rafLast=t; if(running) update(dt); if(running) draw(); updateFloatingTexts(dt); requestAnimationFrame(f);} requestAnimationFrame(f); })();
+</script>
+</body>
+</html>
