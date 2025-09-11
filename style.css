@@ -43,6 +43,7 @@ body{
     box-shadow: 0px 0px 30px black inset;
 }
 .game{
+    cursor: pointer;
     /* z-index: -29; */
     padding: 20px;
     height: 300px;
