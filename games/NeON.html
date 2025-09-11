@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NeON Game</title>
+<style>
+  body { margin:0; background:#000; color:white; font-family:Arial,system-ui; overflow:hidden; }
+  h1 { text-align:center; font-size:48px; color:#0ff; text-shadow:0 0 20px #0ff; margin:20px 0; }
+  #container { display:flex; justify-content:center; gap:20px; }
+  #canvas { background:#111; border:3px solid #0ff; border-radius:12px; 
+            box-shadow:0 0 20px #0ff5; }
+  #slider { position:relative; width:30px; height:500px; background:#222; border-radius:15px;
+            box-shadow:inset 0 0 10px #0ff5; margin-left:20px; }
+  #thumb { position:absolute; left:2px; width:26px; height:14px; border-radius:7px;
+           background:#f0f; box-shadow:0 0 8px #f0f; cursor:pointer; }
+  .hud { text-align:center; margin:15px; font-size:20px; }
+  #levelMenu { width:200px; height:520px; overflow-y:auto; border:2px solid #0ff; 
+               border-radius:12px; padding:10px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;
+               background:#111; box-shadow:0 0 20px #0ff5; }
+  .levelBtn { width:50px; height:50px; display:flex; align-items:center; justify-content:center;
+              background:#000; border:2px solid #0ff; border-radius:10px; 
+              color:#0ff; font-weight:bold; cursor:pointer; text-shadow:0 0 8px #0ff; }
+  .locked { opacity:0.3; cursor:not-allowed; }
+  .btn { background:#000; border:2px solid #f0f; border-radius:12px; padding:8px 16px;
+         font-size:20px; color:#f0f; text-shadow:0 0 8px #f0f; cursor:pointer;
+         box-shadow:0 0 12px #f0f; margin:5px; }
+  #congratsScreen {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:none; justify-content:center; align-items:center; flex-direction:column;
+    background:linear-gradient(270deg,#0ff,#f0f,#ff0,#0f0,#f80,#08f);
+    background-size:1200% 1200%; animation:bgAnim 20s linear infinite;
+    z-index:9999; text-align:center;
+  }
+  @keyframes bgAnim {
+    0%{background-position:0% 50%}
+    50%{background-position:100% 50%}
+    100%{background-position:0% 50%}
+  }
+  #congratsScreen h2 {
+    font-size:60px; color:#fff; text-shadow:0 0 30px #fff,0 0 60px #0ff,0 0 90px #f0f;
+    margin-bottom:20px;
+  }
+  #congratsScreen p {
+    font-size:24px; color:#fff; text-shadow:0 0 10px #0ff;
+    margin-bottom:40px;
+  }
+  #restartBtn {
+    background:#000; border:3px solid #fff; border-radius:20px; padding:15px 40px;
+    font-size:26px; color:#fff; text-shadow:0 0 15px #fff,0 0 25px #0ff;
+    box-shadow:0 0 20px #fff; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+<h1>NeON</h1>
+<div id="container">
+  <div id="levelMenu"></div>
+  <canvas id="canvas" width="500" height="500"></canvas>
+  <div id="slider"><div id="thumb"></div></div>
+</div>
+<div class="hud">
+  Target: <span id="target">50</span>% 
+  <button id="checkBtn" class="btn">Check</button>
+  <div id="feedback">Drag the slider and press Check!</div>
+</div>
+
+<div id="congratsScreen">
+  <h2>🎉 Congratulations! 🎉</h2>
+  <p>You completed all 100 levels of <b>NeON</b>!</p>
+  <button id="restartBtn">Restart Game</button>
+</div>
+
+<script>
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
+const slider=document.getElementById("slider");
+const thumb=document.getElementById("thumb");
+const feedback=document.getElementById("feedback");
+const targetEl=document.getElementById("target");
+const checkBtn=document.getElementById("checkBtn");
+const levelMenu=document.getElementById("levelMenu");
+const congratsScreen=document.getElementById("congratsScreen");
+const restartBtn=document.getElementById("restartBtn");
+
+let dragging=false, liquidY=canvas.height/2;
+let target=50, currentLevel=1, fillPercent=0, totalArea=1, unlocked=[];
+let liquidColor="#0ff";
+
+// --- SHAPES ---
+function makeStar(cx,cy,r){
+  let pts=[];
+  for(let i=0;i<10;i++){
+    let angle=i*Math.PI/5-Math.PI/2;
+    let radius=i%2==0?r:r/2;
+    pts.push([cx+Math.cos(angle)*radius,cy+Math.sin(angle)*radius]);
+  }
+  return pts;
+}
+function makeHex(cx,cy,r){
+  let pts=[];
+  for(let i=0;i<6;i++){
+    let angle=i*Math.PI/3;
+    pts.push([cx+Math.cos(angle)*r,cy+Math.sin(angle)*r]);
+  }
+  return pts;
+}
+function makeTriangle(cx,cy,r){
+  let pts=[];
+  for(let i=0;i<3;i++){
+    let angle=i*2*Math.PI/3-Math.PI/2;
+    pts.push([cx+Math.cos(angle)*r,cy+Math.sin(angle)*r]);
+  }
+  return pts;
+}
+function makeSquare(cx,cy,r){
+  return [[cx-r,cy-r],[cx+r,cy-r],[cx+r,cy+r],[cx-r,cy+r]];
+}
+function makePentagon(cx,cy,r){
+  let pts=[];
+  for(let i=0;i<5;i++){
+    let angle=i*2*Math.PI/5-Math.PI/2;
+    pts.push([cx+Math.cos(angle)*r,cy+Math.sin(angle)*r]);
+  }
+  return pts;
+}
+const shapes=[makeStar,makeHex,makeTriangle,makeSquare,makePentagon];
+
+// --- AREA ---
+function polygonArea(poly){
+  let a=0;
+  for(let i=0;i<poly.length;i++){
+    let [x1,y1]=poly[i], [x2,y2]=poly[(i+1)%poly.length];
+    a+=(x1*y2-x2*y1);
+  }
+  return Math.abs(a)/2;
+}
+function clipBelow(poly,h){
+  let res=[];
+  for(let i=0;i<poly.length;i++){
+    let p1=poly[i],p2=poly[(i+1)%poly.length];
+    let below1=p1[1]>=h, below2=p2[1]>=h;
+    if(below1) res.push(p1);
+    if(below1!=below2){
+      let t=(h-p1[1])/(p2[1]-p1[1]);
+      let x=p1[0]+t*(p2[0]-p1[0]);
+      res.push([x,h]);
+    }
+  }
+  return res;
+}
+
+// --- GAME STATE ---
+function randomNeonColor(){
+  const colors=["#0ff","#f0f","#ff0","#0f0","#f80","#08f"];
+  return colors[Math.floor(Math.random()*colors.length)];
+}
+function loadProgress(){
+  let data=localStorage.getItem("neonProgress");
+  if(data){
+    let obj=JSON.parse(data);
+    unlocked=obj.unlocked||[1];
+    currentLevel=obj.currentLevel||1;
+  } else {
+    unlocked=[1];
+    currentLevel=1;
+  }
+}
+function saveProgress(){
+  unlocked=[...new Set(unlocked)].sort((a,b)=>a-b);
+  localStorage.setItem("neonProgress",JSON.stringify({unlocked,currentLevel}));
+}
+function startLevel(n){
+  currentLevel=n;
+  let shapeFunc=shapes[(n-1)%shapes.length];
+  currentShape=shapeFunc(250,250,200);
+  totalArea=polygonArea(currentShape);
+  target=Math.floor(Math.random()*80)+10;
+  targetEl.textContent=target;
+  feedback.textContent="Drag and press Check!";
+  liquidY=canvas.height/2;
+  thumb.style.top=(slider.clientHeight/2)+"px";
+  liquidColor=randomNeonColor();
+  draw();
+  renderMenu();
+  saveProgress();
+}
+function unlockLevel(n){
+  if(n<=100 && !unlocked.includes(n)){
+    unlocked.push(n);
+    saveProgress();
+    renderMenu();
+  }
+}
+
+// --- DRAW ---
+let currentShape=makeSquare(250,250,200);
+function draw(){
+  ctx.clearRect(0,0,500,500);
+  ctx.strokeStyle="#0ff"; ctx.lineWidth=3; ctx.shadowColor="#0ff"; ctx.shadowBlur=12;
+  ctx.beginPath(); currentShape.forEach(([x,y],i)=>{ if(i==0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.closePath();
+  ctx.stroke();
+  let clipped=clipBelow(currentShape,liquidY);
+  if(clipped.length>2){
+    ctx.fillStyle=liquidColor+"88";
+    ctx.shadowColor=liquidColor; ctx.shadowBlur=20;
+    ctx.beginPath(); clipped.forEach(([x,y],i)=>{ if(i==0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.closePath();
+    ctx.fill();
+  }
+  fillPercent=clipped.length>2? polygonArea(clipped)/totalArea*100 : 0;
+}
+
+// --- SLIDER ---
+thumb.onmousedown=()=>dragging=true;
+window.onmouseup=()=>dragging=false;
+window.onmousemove=e=>{
+  if(dragging){
+    let rect=slider.getBoundingClientRect();
+    let y=e.clientY-rect.top;
+    y=Math.max(0,Math.min(rect.height,y));
+    thumb.style.top=y+"px";
+    liquidY=y/rect.height*canvas.height;
+    draw();
+  }
+};
+
+// --- CHECK ---
+checkBtn.onclick=()=>{
+  let diff=fillPercent-target;
+  if(Math.abs(diff)<=2.5){
+    feedback.textContent=`Correct! You guessed ${fillPercent.toFixed(1)}%`;
+    if(currentLevel===100){
+      setTimeout(()=>{ showCongrats(); },800);
+    } else {
+      unlockLevel(currentLevel+1);
+      setTimeout(()=>{ startLevel(currentLevel+1); },800);
+    }
+  } else {
+    feedback.textContent= diff>0? 
+      `Lower! You guessed ${fillPercent.toFixed(1)}%` : 
+      `Higher! You guessed ${fillPercent.toFixed(1)}%`;
+  }
+};
+
+// --- MENU ---
+function renderMenu(){
+  levelMenu.innerHTML="";
+  for(let i=1;i<=100;i++){
+    let btn=document.createElement("div");
+    btn.textContent=i;
+    btn.className="levelBtn";
+    if(!unlocked.includes(i)){ btn.classList.add("locked"); }
+    btn.onclick=()=>{ if(unlocked.includes(i)) startLevel(i); };
+    if(i===currentLevel) btn.style.boxShadow="0 0 15px #ff0"; // highlight current level
+    levelMenu.appendChild(btn);
+  }
+}
+
+// --- CONGRATS ---
+function showCongrats(){ congratsScreen.style.display="flex"; }
+restartBtn.onclick=()=>{
+  localStorage.removeItem("neonProgress");
+  unlocked=[1];
+  currentLevel=1;
+  renderMenu();
+  congratsScreen.style.display="none";
+  startLevel(1);
+};
+
+// INIT
+loadProgress();
+renderMenu();
+startLevel(currentLevel);
+</script>
+</body>
+</html>

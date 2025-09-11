@@ -35,7 +35,7 @@ body{
 .games{
     padding: 40px;
     display: flex;
-    justify-content: space-between;
+    justify-content: space-evenly;
     flex-wrap: wrap;
     height: 70%;
     gap: 25px;
