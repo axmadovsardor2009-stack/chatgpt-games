@@ -256,7 +256,7 @@ function askNickname(){
   if(!nickname){
     const n = prompt("Enter nickname (max 20 chars):", "Stredo K");
     nickname = (n && n.trim().slice(0,20)) || "Stredo K";
-    localStorage.setItem("stredo_k_nick", nickname);
+    localStorage.setItem("user_name", nickname);
     saveProgress();
   }
 }
