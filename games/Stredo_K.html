@@ -250,7 +250,15 @@ function loadProgress(){
   }catch(e){}
 }
 loadProgress();
-
+if (localStorage.getItem("stredo_k_nick")) {
+  let t = localStorage.getItem("stredo_k_nick");
+  if (t) {
+    nickname = t;
+    localStorage.removeItem("stredo_k_nick");
+    localStorage.setItem("user_name", nickname);
+    saveProgress();
+  }
+}
 // nickname
 function askNickname(){
   if(!nickname){
