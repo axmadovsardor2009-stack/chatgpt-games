@@ -506,13 +506,16 @@ function update(dt){
   }
 
   // movement
-  let ax=0, ay=0; if(keys['w']) ay-=1; if(keys['s']) ay+=1; if(keys['a']) ax-=1; if(keys['d']) ax+=1;
+  let ax=0, ay=0;
+  if(keys['w'] || keys['arrowup']) ay -= 1;
+  if(keys['s'] || keys['arrowdown']) ay += 1;
+  if(keys['a'] || keys['arrowleft']) ax -= 1;
+  if(keys['d'] || keys['arrowright']) ax += 1;
   const mag = Math.hypot(ax,ay) || 1;
   player.vx = ax/mag * player.speed; player.vy = ay/mag * player.speed;
   player.x += player.vx * dt; player.y += player.vy * dt;
   player.x = Math.max(player.r, Math.min(canvas.width-player.r, player.x));
   player.y = Math.max(player.r, Math.min(canvas.height-player.r, player.y));
-
   // shooting (player)
   player.lastShot += dt;
   if(mouse.down && player.lastShot > player.fireRate){
