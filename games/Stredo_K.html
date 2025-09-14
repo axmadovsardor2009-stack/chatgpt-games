@@ -171,7 +171,7 @@ function drawFloatingTexts(){
 // main entities
 function createBrawler(x,y,hp,spd,dmg,fr){ return {x,y,r:20,hp,maxHp:hp,speed:spd,dmg,fireRate:fr,lastShot:0,vx:0,vy:0, isBoss:false}; }
 let player, bots = [], projectiles = [], score = 0, level = 1, running = false, levelBreak = 0;
-let nickname = null;
+
 
 // economy & upgrades
 let coins = 0;
@@ -250,26 +250,17 @@ function loadProgress(){
   }catch(e){}
 }
 loadProgress();
-if (localStorage.getItem("stredo_k_nick")) {
-  let t = localStorage.getItem("stredo_k_nick");
-  if (t) {
-    nickname = t;
-    localStorage.removeItem("stredo_k_nick");
-    localStorage.setItem("user_name", nickname);
-    saveProgress();
-  }
-}
+let nickname = localStorage.getItem("user_name") || null;
+
 // nickname
 function askNickname(){
-  if(!nickname){
-    const n = prompt("Enter nickname (max 20 chars):", "Stredo K");
-    nickname = (n && n.trim().slice(0,20)) || "Stredo K";
-    localStorage.setItem("user_name", nickname);
-    saveProgress();
-  }
+  let n = prompt("Enter nickname (max 20 chars):", "Stredo K");
+  nickname = (n && n.trim().slice(0,20)) || "Stredo K";
+  localStorage.setItem("user_name", nickname);
+  saveProgress();
 }
-if(!nickname) askNickname();
 
+if(!nickname) askNickname();
 // helper to give coins (applies global 3x multiplier for all rewards)
 function giveCoins(amount){
   const times = 3; // global multiplier
@@ -830,12 +821,13 @@ function updateHUD(){
   hud.coins.textContent = coins;
   hud.score.textContent = score;
   hud.coinsU.textContent = coins;
-  hud.nick.textContent = nickname ? ("👤 " + nickname) : "";
+  // Always use the latest from localStorage
+  const name = localStorage.getItem("user_name") || "";
+  hud.nick.textContent = name ? ("👤 " + name) : "";
   renderUpgradeUI();
   renderQuests();
   renderPowerUI();
 }
-
 // messages & buffs
 function showMessage(t,c){ messageEl.style.display = "block"; messageEl.textContent = t; messageEl.style.color = c; messageEl.style.animation="none"; messageEl.offsetHeight; messageEl.style.animation="pop 1s ease forwards"; setTimeout(()=>messageEl.style.display="none",2500); }
 

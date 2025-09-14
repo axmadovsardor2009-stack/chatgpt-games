@@ -28,6 +28,9 @@
     <div></div>
 </body>
 <script>
+    if (!localStorage.getItem("user_name")){ 
+        localStorage.setItem("user_name", prompt("Enter your name:"));
+    }
     let name = ()=> document.getElementById("name").innerText = localStorage.getItem("user_name") || "Name";
 </script>
 </html>
