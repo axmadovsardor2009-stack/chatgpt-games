@@ -249,8 +249,9 @@ function loadProgress(){
     if(d.level) level = d.level;
   }catch(e){}
 }
-loadProgress();
 let nickname = localStorage.getItem("user_name") || null;
+loadProgress();
+
 
 // nickname
 function askNickname(){
@@ -339,10 +340,9 @@ function showLevelSelect(){
 // startGame default or at level
 function startGame(startLevel = null){
   menu.style.display = "none"; upgradesPanel.style.display = "none"; questsPanel.style.display = "none"; levelSelectPanel.style.display = "none";
-  askNickname();
   player = createBrawler(canvas.width/2, canvas.height/2, playerStats.hp, playerStats.spd, playerStats.dmg, playerStats.rld);
   player.hp = player.maxHp = playerStats.hp; player.speed = playerStats.spd; player.dmg = playerStats.dmg; player.fireRate = playerStats.rld; player.lastShot = 0;
-  projectiles = []; score = 0; running = true;
+  projectiles = []; score = 0; running = true; player = createBrawler(canvas.width/2, canvas.height/2, playerStats.hp, playerStats.spd, playerStats.dmg, playerStats.rld);
   if(startLevel) { level = startLevel; } else if(level < 1) level = 1;
   spawnBots(level);
   levelBreak = 0;
@@ -428,7 +428,6 @@ function deactivatePower(){ if(!chosenPower){ alert("No power active"); return; 
 
 function renderPowerUI(){
   Array.from(powerList.querySelectorAll("button")).forEach(btn=>{ btn.disabled = false; });
-  powerInfo.textContent = chosenPower ? ("Active power: " + chosenPower) : "No active special power";
   document.getElementById("powerInfo").innerText = chosenPower ? ("Active: " + chosenPower) : "No special power";
 }
 
@@ -748,7 +747,7 @@ function draw(){
   // draw nickname above player with background for visibility
   ctx.font = "14px Arial";
   ctx.textAlign = "center";
-  const name = nickname || "Player";
+  const name = localStorage.getItem("user_name") || "Player";
   const textW = ctx.measureText(name).width + 12;
   const bx = player.x - textW/2, by = player.y - player.r - 36;
   // rounded rect background
