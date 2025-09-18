@@ -605,17 +605,20 @@ function update(dt){
               if(!q.done && wasBoss && q.text.toLowerCase().includes("boss")){ q.progress = (q.progress||0)+1; if(q.progress>=q.target){ q.done=true; giveCoins(q.reward); } }
             }
             if(bots.length === 0){
-              // level cleared
-              level++; giveCoins(15); // level clear reward (3x applied)
-              // mark quests for wins
-              for(const q of quests){ if(!q.done && (q.text.includes("Win") || q.text.includes("victory"))){ q.progress = (q.progress||0)+1; if(q.progress>=q.target){ q.done=true; giveCoins(q.reward); } } }
-              player.hp = player.maxHp;
-              applyTempBuff();
-              levelBreak = 2.0; // 2 second pause before next wave spawn
-              // unlock next level
-              if(level <= MAX_LEVEL && !unlockedLevels.includes(level)) unlockedLevels.push(level);
-              saveProgress();
-            }
+  // level cleared
+  level++;
+  // Only give coins if this is a new level (not previously unlocked)
+  if(level <= MAX_LEVEL && !unlockedLevels.includes(level)) {
+    giveCoins(15); // level clear reward (3x applied)
+    unlockedLevels.push(level);
+  }
+  // mark quests for wins
+  for(const q of quests){ if(!q.done && (q.text.includes("Win") || q.text.includes("victory"))){ q.progress = (q.progress||0)+1; if(q.progress>=q.target){ q.done=true; giveCoins(q.reward); } } }
+  player.hp = player.maxHp;
+  applyTempBuff();
+  levelBreak = 2.0; // 2 second pause before next wave spawn
+  saveProgress();
+}
           }
           break;
         }
