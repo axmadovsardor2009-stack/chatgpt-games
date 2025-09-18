@@ -516,7 +516,8 @@ function update(dt){
   player.y = Math.max(player.r, Math.min(canvas.height-player.r, player.y));
   // shooting (player)
   player.lastShot += dt;
-  if(mouse.down && player.lastShot > player.fireRate){
+  if((mouse.down || keys[' ']) && player.lastShot > player.fireRate){
+    // If using space, shoot toward mouse position
     projectiles.push(createBullet("player", player.x, player.y, mouse.x-player.x, mouse.y-player.y, 400*dt, player.dmg));
     player.lastShot = 0;
   }
